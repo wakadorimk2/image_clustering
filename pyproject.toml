@@ -13,6 +13,7 @@ scikit-image = "^0.22.0"
 matplotlib = "^3.8.2"
 tqdm = "^4.66.1"
 cucim = "^23.10.0"
+cupy-cuda11x = "^12.3.0"
 
 
 [build-system]

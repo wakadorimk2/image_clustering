@@ -3,11 +3,10 @@ from tqdm import tqdm
 from pprint import pformat
 
 import numpy as np
-import cupy as cupy
+import cupy as cp
 import cucim
+import skimage
 from sklearn.cluster import KMeans
-from skimage.io import imread
-from skimage.transform import resize
 import matplotlib.pyplot as plt
 
 # 画像フォルダのパス
@@ -24,8 +23,8 @@ def load_and_resize_images(folder_path, size=(256, 256)):
     progress_tqdm = tqdm(total=total_loop, unit='count', desc='Loading images')
     for filename in os.listdir(folder_path):
         if filename.endswith('.jpg'):
-            img = imread(os.path.join(folder_path, filename))
-            img_resized = resize(img, size, anti_aliasing=True)
+            img = skimage.io.imread(os.path.join(folder_path, filename))
+            img_resized = skimage.transform.resize(img, size, anti_aliasing=True)
             images.append(img_resized.flatten())
             filenames.append(filename)
             progress_tqdm.update(1)
