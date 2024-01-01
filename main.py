@@ -3,13 +3,15 @@ from tqdm import tqdm
 from pprint import pformat
 
 import numpy as np
-import skimage
+from PIL import Image
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
+from torchvision import transforms
+
 from sklearn.cluster import KMeans
 
 # GPUの使用を設定（利用可能な場合）
@@ -22,7 +24,11 @@ image_folder = '../images'
 image_size = (512, 512, 3)
 
 # 画像の枚数
-num_images = len(os.listdir(image_folder)) // 100
+num_images = 0
+for filename in os.listdir(image_folder):
+    if filename.endswith('.jpg'):
+        num_images += 1
+num_images = num_images // 100
 
 # クラスタ数
 n_clusters = 10
@@ -51,28 +57,38 @@ def load_and_resize_images(folder_path, size=image_size[0:2]):
     images = []
     filenames = []
     progress_tqdm = tqdm(total=num_images, unit='count', desc='Loading images')
-    for filename in os.listdir(folder_path)[:num_images]:
+    transform = transforms.Compose([
+        transforms.Resize(size),
+        transforms.ToTensor(),
+    ])
+
+    count = 0
+    for filename in os.listdir(folder_path):
         if filename.endswith('.jpg'):
-            img = skimage.io.imread(os.path.join(folder_path, filename))
-            img_resized = skimage.transform.resize(img, size, anti_aliasing=True)
-            images.append(img_resized.flatten())
-            filenames.append(filename)
-            progress_tqdm.update(1)
+            count += 1
+            if count > num_images:
+                break
+            img_path = os.path.join(folder_path, filename)
+            with Image.open(img_path) as img:
+                img_tensor = transform(img).to(device)
+                images.append(img_tensor)
+                filenames.append(filename)
+                progress_tqdm.update(1)
     progress_tqdm.close()
-    return np.array(images), filenames
+    return images, filenames
 
 
-def visualize_clusters(images, clusters, n_clusters=n_clusters, num_images=5):
+def visualize_clusters(images, clusters, n_clusters=n_clusters, num_columns=5):
     """クラスタリング結果を画像として表示する"""
     plt.figure(figsize=(15, n_clusters * 3))
     
     for cluster in range(n_clusters):
         cluster_indices = np.where(clusters == cluster)[0]
-        selected_indices = cluster_indices[:num_images]
+        selected_indices = cluster_indices[:num_columns]
         
         for i, index in enumerate(selected_indices):
-            plt.subplot(n_clusters, num_images, cluster * num_images + i + 1)
-            plt.imshow(images[index].reshape(512, 512, -1))  # 形状に応じて変更
+            plt.subplot(n_clusters, num_columns, cluster * num_columns + i + 1)
+            plt.imshow(images[index].reshape(image_size[0], image_size[1], -1))  # 形状に応じて変更
             plt.axis('off')
             plt.title(f'Cluster {cluster + 1}')
 
@@ -83,6 +99,9 @@ def visualize_clusters(images, clusters, n_clusters=n_clusters, num_images=5):
 data, filenames = load_and_resize_images(image_folder)
 
 # データをPyTorchテンソルに変換
+data = torch.stack(data, dim=0)  # テンソルに変換
+data = data.permute(0, 2, 3, 1)  # チャンネルを最後に移動
+data = data.reshape(data.shape[0], -1)  # 1次元ベクトルに変換
 tensor_data = torch.Tensor(data).to(device)
 
 # データローダーの作成
@@ -92,6 +111,7 @@ dataloader = DataLoader(TensorDataset(tensor_data), batch_size=32, shuffle=True)
 autoencoder = Autoencoder().to(device)
 
 # 訓練ループ（省略：ここに訓練コードを追加）
+
 
 # エンコードされた特徴の抽出
 encoded_features = autoencoder.encoder(tensor_data).cpu().detach().numpy()
@@ -106,6 +126,9 @@ for i in range(n_clusters):
     print(f"Cluster {i+1}:")
     for index in cluster_indices:
         print(filenames[index])
+
+# データを元に戻す
+data = data.detach().cpu().numpy()  # NumPy配列に変換
 
 # 画像データとクラスタリング結果を使って可視化
 visualize_clusters(data, clusters)
