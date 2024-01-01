@@ -1,6 +1,8 @@
+from typing import Any, List
+from pprint import pformat
+
 import os
 from tqdm import tqdm
-from pprint import pformat
 
 import numpy as np
 from PIL import Image
@@ -32,6 +34,10 @@ num_images = num_images // 100
 
 # クラスタ数
 n_clusters = 10
+
+# 訓練のパラメータ
+num_epochs = 100  # エポック数を設定
+batch_size = 32  # バッチサイズを設定
 
 class Autoencoder(nn.Module):
     """Autoencoderのモデル"""
@@ -78,7 +84,7 @@ def load_and_resize_images(folder_path, size=image_size[0:2]):
     return images, filenames
 
 
-def visualize_clusters(images, clusters, n_clusters=n_clusters, num_columns=5):
+def visualize_clusters(images: List[Any], clusters, n_clusters=n_clusters, num_columns=5):
     """クラスタリング結果を画像として表示する"""
     plt.figure(figsize=(15, n_clusters * 3))
     
@@ -96,21 +102,43 @@ def visualize_clusters(images, clusters, n_clusters=n_clusters, num_columns=5):
 
 
 # 画像データの読み込み
-data, filenames = load_and_resize_images(image_folder)
+data_images, filenames = load_and_resize_images(image_folder)
 
 # データをPyTorchテンソルに変換
-data = torch.stack(data, dim=0)  # テンソルに変換
-data = data.permute(0, 2, 3, 1)  # チャンネルを最後に移動
-data = data.reshape(data.shape[0], -1)  # 1次元ベクトルに変換
-tensor_data = torch.Tensor(data).to(device)
+data_images = torch.stack(data_images, dim=0)  # テンソルに変換
+data_images = data_images.permute(0, 2, 3, 1)  # チャンネルを最後に移動
+data_images = data_images.reshape(data_images.shape[0], -1)  # 1次元ベクトルに変換
+tensor_data = torch.Tensor(data_images).to(device)
 
 # データローダーの作成
-dataloader = DataLoader(TensorDataset(tensor_data), batch_size=32, shuffle=True)
+dataloader = DataLoader(TensorDataset(tensor_data), batch_size=batch_size, shuffle=True)
 
 # Autoencoderのインスタンス化とGPUへの移動
 autoencoder = Autoencoder().to(device)
 
-# 訓練ループ（省略：ここに訓練コードを追加）
+# 訓練ループ
+# 損失関数とオプティマイザの定義
+criterion = nn.MSELoss()
+optimizer = torch.optim.Adam(autoencoder.parameters(), lr=0.001)
+
+# 訓練ループ
+for epoch in range(num_epochs):
+    for data in dataloader:
+        for img in data:
+            img = img.to(device)
+            
+            # Autoencoderによる再構成
+            output = autoencoder(img)
+            loss = criterion(output, img)
+
+            # バックプロパゲーション
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+        
+    print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}')
+
+print("訓練完了！")
 
 
 # エンコードされた特徴の抽出
@@ -119,16 +147,11 @@ encoded_features = autoencoder.encoder(tensor_data).cpu().detach().numpy()
 # KMeansクラスタリング
 kmeans = KMeans(n_clusters=n_clusters, random_state=42)
 clusters = kmeans.fit_predict(encoded_features)
-
-# クラスタリング結果の表示
-for i in range(n_clusters):
-    cluster_indices = np.where(clusters == i)[0]
-    print(f"Cluster {i+1}:")
-    for index in cluster_indices:
-        print(filenames[index])
+print("KMeansクラスタリング完了！")
 
 # データを元に戻す
-data = data.detach().cpu().numpy()  # NumPy配列に変換
+data_images = tensor_data.detach().cpu().numpy()  # NumPy配列に変換
+print("clusters:", clusters)
 
 # 画像データとクラスタリング結果を使って可視化
-visualize_clusters(data, clusters)
+visualize_clusters(data_images, clusters)
