@@ -2,14 +2,14 @@ from typing import Any, List
 from pprint import pformat
 
 import os
-from tqdm import tqdm
 
 import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
 
 import torch
-from torchvision import transforms
+
+from openai import OpenAI
 
 from transformers import GPT2Tokenizer, GPT2LMHeadModel, pipeline
 
@@ -23,6 +23,9 @@ n_clusters = 10
 
 # 画像フォルダのパス
 image_folder = '../images'
+
+# OpenAI APIのクライアントを作成
+client = OpenAI()
 
 
 def visualize_clusters(image_filenames: List[Any], clusters, n_clusters=n_clusters, num_columns=5):
@@ -43,10 +46,15 @@ def visualize_clusters(image_filenames: List[Any], clusters, n_clusters=n_cluste
     plt.savefig('../clusters.png')
 
 
+def get_embedding(text, model="text-embedding-ada-002"):
+   text = text.replace("\n", " ")
+   return client.embeddings.create(input = [text], model=model).data[0].embedding
+
+
 # 画像の総数とリスト取得
 num_images = 0
 image_filenames = []
-for filename in os.listdir(image_folder)[:10]:
+for filename in os.listdir(image_folder):
     if filename.endswith('.jpg') or filename.endswith('.png'):
         num_images += 1
         image_filenames.append(os.path.join(image_folder, filename))
@@ -66,9 +74,14 @@ for tag_with_images in tags_with_images:
     for tag_with_image in tag_with_images:
         tags_preprocessed.append(tag_with_image['generated_text'])
 
+# タグのベクトル化
+tags_embeddings = []
+for tag in tags_preprocessed:
+    tags_embeddings.append(get_embedding(tag))
+
 # KMeansクラスタリング
 kmeans = KMeans(n_clusters=n_clusters, random_state=42)
-clusters = kmeans.fit_predict(tags_preprocessed)
+clusters = kmeans.fit_predict(tags_embeddings)
 print("KMeansクラスタリング完了！")
 print("clusters:", clusters)
 
