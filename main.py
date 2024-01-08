@@ -28,9 +28,9 @@ image_size = (512, 512, 3)
 # 画像の枚数
 num_images = 0
 for filename in os.listdir(image_folder):
-    if filename.endswith('.jpg'):
+    if filename.endswith('.jpg') or filename.endswith('.png'):
         num_images += 1
-num_images = num_images // 100
+num_images = num_images
 
 # クラスタ数
 n_clusters = 10
@@ -70,14 +70,14 @@ def load_and_resize_images(folder_path, size=image_size[0:2]):
 
     count = 0
     for filename in os.listdir(folder_path):
-        if filename.endswith('.jpg'):
+        if filename.endswith('.jpg') or filename.endswith('.png'):
             count += 1
             if count > num_images:
                 break
             img_path = os.path.join(folder_path, filename)
             with Image.open(img_path) as img:
                 img_tensor = transform(img).to(device)
-                images.append(img_tensor)
+                images.append(img_tensor[0:3, :, :])  # pngのアルファチャンネルを削除
                 filenames.append(filename)
                 progress_tqdm.update(1)
     progress_tqdm.close()
